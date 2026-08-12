@@ -1,0 +1,28 @@
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.spec
+
+# 日志
+logs/*.log
+
+# 运行时状态
+data/state/*.json
+!data/state/.gitkeep
+
+# 环境
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# 系统
+.DS_Store
+Thumbs.db

@@ -1,0 +1,29 @@
+﻿{% extends "base.html" %}
+{% block title %}预警面板 - 企业微信群发系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>🚨 预警面板</h1>
+  <span id="alert-total" class="text-muted"></span>
+</div>
+
+<div class="section">
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>等级</th>
+          <th>群名</th>
+          <th>超时时长</th>
+          <th>触发时间</th>
+          <th>状态</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="alert-list">
+        <tr><td colspan="6" class="text-center text-muted">暂无预警</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

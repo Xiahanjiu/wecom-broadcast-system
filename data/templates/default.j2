@@ -1,0 +1,11 @@
+﻿【{{ common_content or '通知' }}】
+各位{{ group_name }}的朋友们大家好！
+
+{{ common_content }}
+
+{% if custom_note %}
+📌 {{ custom_note }}
+{% endif %}
+
+---
+{{ date | date }}

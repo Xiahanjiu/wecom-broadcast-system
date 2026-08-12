@@ -1,0 +1,38 @@
+﻿# 企业微信群发系统 — 依赖清单
+# 安装: pip install -r requirements.txt
+
+# Web 框架 + 通信
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+websockets>=12.0
+jinja2>=3.1.0
+
+# Windows UI 自动化
+uiautomation>=2.0.18
+pyautogui>=0.9.54
+pyperclip>=1.8.2
+
+# OCR (降级方案)
+paddleocr>=2.7.0
+paddlepaddle>=2.5.0
+
+# 定时调度
+apscheduler>=3.10.0
+
+# 桌面通知
+win10toast>=0.9
+playsound>=1.3.0
+
+# 局域网发现
+zeroconf>=0.120.0
+
+# 配置与数据处理
+pyyaml>=6.0
+python-multipart>=0.0.6
+
+# 图像处理
+opencv-python>=4.8.0
+pillow>=10.0.0
+
+# 打包
+pyinstaller>=6.0.0

@@ -1,0 +1,34 @@
+﻿{% extends "base.html" %}
+{% block title %}模板编辑 - 企业微信群发系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>📝 模板编辑</h1>
+  <div class="header-actions">
+    <select id="template-select" onchange="loadTemplate()">
+      <option value="">选择模板...</option>
+    </select>
+    <button class="btn btn-primary" onclick="saveTemplate()">💾 保存</button>
+    <button class="btn btn-outline" onclick="previewTemplate()">👁 预览</button>
+  </div>
+</div>
+
+<div class="section template-editor">
+  <div class="editor-pane">
+    <textarea id="template-editor" placeholder="在此编写消息模板...支持 Jinja2 语法"></textarea>
+  </div>
+  <div class="preview-pane" id="preview-pane">
+    <h3>预览</h3>
+    <div id="preview-content" class="preview-box"></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>可用变量</h3>
+  <code>{% raw %}{{ group_name }}{% endraw %}</code> - 群名<br>
+  <code>{% raw %}{{ date }}{% endraw %}</code> - 当前日期<br>
+  <code>{% raw %}{{ common_content }}{% endraw %}</code> - 通用内容<br>
+  <code>{% raw %}{{ custom_note }}{% endraw %}</code> - 自定义备注<br>
+  <code>{% raw %}{% if custom_note %}...{% endif %}{% endraw %}</code> - 条件判断
+</div>
+{% endblock %}

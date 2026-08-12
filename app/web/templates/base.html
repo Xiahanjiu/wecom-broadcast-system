@@ -1,0 +1,57 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}企业微信群发系统{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- 侧边栏 -->
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <h2>📡 群发系统</h2>
+        <span class="version">v1.0</span>
+      </div>
+      <ul class="nav-menu">
+        <li class="nav-item">
+          <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">
+            📊 仪表盘
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/alerts" class="nav-link {% if request.url.path == '/alerts' %}active{% endif %}">
+            🚨 预警面板
+            <span id="alert-badge" class="badge" style="display:none">0</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/groups" class="nav-link {% if request.url.path == '/groups' %}active{% endif %}">
+            👥 群管理
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/templates" class="nav-link {% if request.url.path == '/templates' %}active{% endif %}">
+            📝 模板编辑
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="/logs" class="nav-link {% if request.url.path == '/logs' %}active{% endif %}">
+            📋 日志
+          </a>
+        </li>
+      </ul>
+      <div class="sidebar-footer">
+        <span id="connection-status" class="status offline">● 离线</span>
+      </div>
+    </nav>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

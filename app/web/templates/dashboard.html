@@ -1,0 +1,105 @@
+﻿{% extends "base.html" %}
+{% block title %}仪表盘 - 企业微信群发系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>📊 仪表盘</h1>
+  <div class="header-actions">
+    <button class="btn btn-primary" onclick="triggerSend()">📨 立即群发</button>
+    <button class="btn btn-outline" onclick="refreshData()">🔄 刷新</button>
+    <span id="last-update" class="text-muted"></span>
+  </div>
+</div>
+
+<!-- 统计卡片 -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value" id="online-count">{{ data.online_workers }}</div>
+    <div class="stat-label">在线执行端</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="total-workers">{{ data.total_workers }}</div>
+    <div class="stat-label">总执行端</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="active-groups">{{ data.active_groups_count }}</div>
+    <div class="stat-label">今日活跃群</div>
+  </div>
+  <div class="stat-card warning">
+    <div class="stat-value" id="alert-count">{{ data.alerts_count }}</div>
+    <div class="stat-label">待处理预警</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="send-completed">{{ data.send_tasks.completed }}</div>
+    <div class="stat-label">已发送</div>
+  </div>
+  <div class="stat-card danger">
+    <div class="stat-value" id="send-failed">{{ data.send_tasks.failed }}</div>
+    <div class="stat-label">发送失败</div>
+  </div>
+</div>
+
+<!-- 执行端状态 -->
+<div class="section">
+  <h2>🖥 执行端状态</h2>
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>状态</th>
+          <th>执行端</th>
+          <th>负责群数</th>
+          <th>最后心跳</th>
+          <th>监控状态</th>
+        </tr>
+      </thead>
+      <tbody id="worker-list">
+        {% for worker in data.worker_list %}
+        <tr class="worker-row" data-id="{{ worker.id }}">
+          <td>
+            <span class="status-dot {{ 'online' if worker.status == 'online' else 'offline' }}"></span>
+            {{ '在线' if worker.status == 'online' else '离线' }}
+          </td>
+          <td>{{ worker.name }}</td>
+          <td>{{ worker.group_count }}</td>
+          <td>{{ worker.last_heartbeat or '-' }}</td>
+          <td>{{ worker.monitor_stats.assigned_groups if worker.monitor_stats else '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted">暂无执行端</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 活跃群 -->
+<div class="section">
+  <h2>🔥 今日活跃群 ({{ data.active_groups_count }})</h2>
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>群名</th>
+          <th>最后客户发言</th>
+          <th>发送者</th>
+          <th>负责执行端</th>
+        </tr>
+      </thead>
+      <tbody id="active-group-list">
+        {% for group in data.active_groups %}
+        <tr>
+          <td>{{ group.group_name }}</td>
+          <td>{{ group.last_customer_msg }}</td>
+          <td>{{ group.sender }}</td>
+          <td>{{ data.group_assignment.get(group.group_name, '-') }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-center text-muted">今日暂无活跃群</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,30 @@
+﻿{% extends "base.html" %}
+{% block title %}群管理 - 企业微信群发系统{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>👥 群管理</h1>
+  <div class="header-actions">
+    <button class="btn btn-outline" onclick="importGroups()">📥 导入群列表</button>
+    <button class="btn btn-outline" onclick="exportGroups()">📤 导出</button>
+  </div>
+</div>
+
+<div class="section">
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>群名</th>
+          <th>分配执行端</th>
+          <th>自定义备注</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="group-list">
+        <tr><td colspan="4" class="text-center text-muted">请先导入群列表</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
