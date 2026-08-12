@@ -14,6 +14,7 @@ from starlette.requests import Request
 from app.shared.config import Config
 from app.shared.group_manager import get_group_manager
 from app.master.core import get_master_core
+from app.scheduler import get_scheduler
 from app.master.routes.pages import router as pages_router
 
 logger = logging.getLogger(__name__)
@@ -38,9 +39,14 @@ class MasterServer:
         async def lifespan(app: FastAPI):
             logger.info("主控端服务启动中...")
             heartbeat_task = asyncio.create_task(self.core._heartbeat_loop())
+            # 启动定时任务调度器（节假日群发、休息时段自动回复、超时预警）
+            scheduler = get_scheduler()
+            scheduler.start()
             yield
             logger.info("主控端服务关闭中...")
             heartbeat_task.cancel()
+            scheduler = get_scheduler()
+            scheduler.stop()
             try:
                 await heartbeat_task
             except asyncio.CancelledError:
@@ -261,3 +267,4 @@ class MasterServer:
         port = self.config.get("relay.master_port", 8080)
         logger.info(f"主控端 Web 服务启动于 http://localhost:{port}")
         uvicorn.run(self.app, host="0.0.0.0", port=port, log_level="info")
+

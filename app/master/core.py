@@ -177,8 +177,11 @@ class MasterCore:
 
     # ==== 任务分配 ====
 
-    async def dispatch_send_tasks(self, active_groups: list):
+    async def dispatch_send_tasks(self, active_groups: list, extra: dict = None):
         """根据活跃群列表向在线执行端分配发送任务。"""
+
+        extra = extra or {}
+        is_holiday = extra.get("is_holiday", False)
         # 按分配关系组织任务
         worker_tasks: Dict[str, list] = {}
 
@@ -210,7 +213,7 @@ class MasterCore:
                 "type": "send_task",
                 "task_id": task_id,
                 "groups": groups,
-                "template": "default.j2",
+                "template": extra.get("template", "default.j2"),
             }
             success = await self._send_to_worker(worker_id, task_data)
             if success:
@@ -237,6 +240,32 @@ class MasterCore:
                 logger.info(f"任务完成: {task_id}, 成功 {task_result['completed']}, 失败 {task_result['failed']}")
 
     # ==== 预警广播 ====
+
+
+    async def dispatch_auto_reply(self, group_name: str, reply_text: str):
+        """���Ϣʱ���Զ��ظ�����"""
+        worker_id = self._group_assignment.get(group_name)
+        if not worker_id:
+            logger.warning(f"�Զ��ظ�ʧ��: {group_name} δ����ִ�ж�")
+            return
+        if worker_id not in self._workers:
+            logger.warning(f"�Զ��ظ�ʧ��: {worker_id} δע��")
+            return
+        if self._workers[worker_id].get("status") != "online":
+            online = [w for w in self._workers if self._workers[w].get("status") == "online"]
+            if online:
+                worker_id = online[0]
+            else:
+                logger.warning("�Զ��ظ�ʧ��: ������ִ�ж�")
+                return
+
+        task_data = {
+            "type": "auto_reply",
+            "group_name": group_name,
+            "reply_text": reply_text,
+        }
+        await self._send_to_worker(worker_id, task_data)
+        logger.info(f"自动回复任务已下发: {group_name} -> {worker_id}")
 
     async def broadcast_alert(self, alert_data: dict):
         """向所有在线执行端广播预警。"""
@@ -331,3 +360,7 @@ def get_master_core():
     if _master_core is None:
         _master_core = MasterCore()
     return _master_core
+
+
+
+

@@ -157,6 +157,12 @@ class WorkerClient:
 
             # 异步执行发送
             asyncio.create_task(self.sender.execute_task(data))
+        elif msg_type == "auto_reply":
+            group_name = data.get("group_name")
+            reply_text = data.get("reply_text")
+            if group_name and reply_text:
+                logger.info(f"收到自动回复任务: {group_name}")
+                asyncio.create_task(self.sender.send_auto_reply(group_name, reply_text))
 
         elif msg_type == "takeover":
             # 接管其他执行端的群
@@ -283,3 +289,5 @@ class WorkerClient:
             else:
                 logger.error("重连失败，执行端将继续本地运行")
                 # 本地模式: 仍可监控和弹窗，但无法上报
+
+

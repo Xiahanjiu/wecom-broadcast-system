@@ -2,14 +2,11 @@
 # 企业微信群发系统 — 全局配置
 # ============================================
 
-# 运行模式: master / worker
 mode: master
 
 # ----- 通信配置 -----
 relay:
-  # WebSocket 中继地址（start_master.ps1 启动时自动填入）
   url: "ws://localhost:3000"
-  # 本地服务端口（主控模式使用）
   master_port: 8080
 
 # ----- 局域网发现 -----
@@ -37,10 +34,51 @@ alert:
 
 # ----- 发送配置 -----
 send:
-  delay_min: 2
-  delay_max: 5
-  schedule_cron: "0 9 * * *"
+  # 群间延迟（700个群需要更长间隔防风控）
+  delay_min: 5
+  delay_max: 10
+  # 发送失败重试次数
   retry_count: 3
+
+# ----- 休息时段自动回复 -----
+rest_period:
+  enabled: true
+  # 休息时段定义（支持多段）
+  periods:
+    - start: "22:00"    # 晚上10点到次日早上7点
+      end: "07:00"
+  # 工作日也包含午休
+  lunch_break:
+    enabled: false       # 是否启用午休自动回复
+    start: "12:00"
+    end: "13:30"
+  # 周末全天自动回复
+  weekend_all_day: true
+  # 自动回复内容（支持变量: {{group_name}} {{date}} {{time}}）
+  auto_reply: |
+    您好，现在是休息时间（{{time}}），
+    我们会在工作时间尽快回复您。
+    如有紧急事务，请拨打客服热线。
+
+# ----- 节假日群发 -----
+holiday:
+  enabled: true
+  # 节日日历（月-日: 模板名）
+  # 每天凌晨检查，命中则触发全量群发
+  calendar:
+    "01-01": "holiday_new_year.j2"       # 元旦
+    "01-29": "holiday_spring_festival.j2" # 春节（农历正月初一，每年需手动更新）
+    "05-01": "holiday_labor.j2"          # 劳动节
+    "06-01": "holiday_default.j2"        # 儿童节
+    "09-28": "holiday_mid_autumn.j2"     # 中秋（每年需手动更新）
+    "10-01": "holiday_national.j2"       # 国庆
+    "12-25": "holiday_default.j2"        # 圣诞节
+  # 发送时间（每天早上几点触发）
+  trigger_hour: 9
+  trigger_minute: 0
+  # 节假日群发使用独立的延迟（700个群，更保守）
+  delay_min: 5
+  delay_max: 15
 
 # ----- 日志配置 -----
 logging:

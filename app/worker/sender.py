@@ -153,8 +153,8 @@ class SendEngine:
             # 群间随机延迟
             if i < len(groups) - 1 and sent:
                 delay = random.uniform(
-                    self.config.get("send.delay_min", 2),
-                    self.config.get("send.delay_max", 5)
+                    task.get("delay_min", self.config.get("send.delay_min", 2)),
+                    task.get("delay_max", self.config.get("send.delay_max", 5))
                 )
                 await asyncio.sleep(delay)
 
@@ -196,6 +196,31 @@ class SendEngine:
             "progress": self._progress,
         }
 
+    
+    async def send_auto_reply(self, group_name: str, reply_text: str) -> bool:
+        """ִ���Զ��ظ� - ���ض�Ⱥ����ָ�����ı���"""
+        try:
+            window_ok = await asyncio.to_thread(self.wecom.find_window)
+            if not window_ok:
+                logger.error("δ�ҵ���ҵ΢�Ŵ��ڣ��Զ��ظ�ʧ��")
+                return False
+
+            found = await asyncio.to_thread(self.wecom.search_group, group_name)
+            if not found:
+                logger.error(f"�޷��ҵ�Ⱥ: {group_name}")
+                return False
+
+            sent = await asyncio.to_thread(self.wecom.send_message, reply_text)
+            if not sent:
+                return False
+
+            logger.info(f"�Զ��ظ��ɹ�: {group_name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"�Զ��ظ�ʧ��: {group_name} - {e}")
+            return False
+
     def resume_task(self, task_id: str) -> Optional[dict]:
         """恢复中断的任务（断点续传）。"""
         progress = self._progress.get(task_id)
@@ -218,3 +243,4 @@ class SendEngine:
             return task
 
         return None
+
