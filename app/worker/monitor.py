@@ -18,6 +18,9 @@ class MonitorEngine:
 
     周期性轮询企微聊天列表，检测客户新发言，
     识别员工回复，上报给主控。
+
+    启动时自动扫描群成员面板，通过企微 UI 的"客户"标签
+    建立准确的客户名称集合。
     """
 
     def __init__(self, worker_id: str, assigned_groups: Set[str] = None):
@@ -30,7 +33,7 @@ class MonitorEngine:
         self._assigned_groups: Set[str] = assigned_groups or set()
 
         # 已知的聊天状态（用于比对变化）
-        self._known_messages: dict = {}  # group_name -> last_message_text
+        self._known_messages: dict = {}
 
         # 回调
         self._on_customer_msg = None
@@ -44,24 +47,51 @@ class MonitorEngine:
     # ==== 事件回调 ====
 
     def on_customer_msg(self, callback):
-        """客户发言回调。"""
         self._on_customer_msg = callback
 
     def on_staff_reply(self, callback):
-        """员工回复回调。"""
         self._on_staff_reply = callback
 
     def on_alert(self, callback):
-        """超时预警回调。"""
         self._on_alert = callback
 
     # ==== 生命周期 ====
 
     async def start(self):
-        """启动监控循环。"""
+        """启动监控，先扫描群成员面板建立客户识别库。"""
+        # 启动时扫描群成员面板，获取客户标签
+        await self._init_customer_database()
+
         self._running = True
         self._task = asyncio.create_task(self._monitor_loop())
-        logger.info(f"监控引擎已启动 (负责 {len(self._assigned_groups)} 个群)")
+        logger.info(f"监控引擎已启动 (负责 {len(self._assigned_groups)} 个群, "
+                     f"已知客户 {self.classifier.known_customer_count} 个)")
+
+    async def _init_customer_database(self):
+        """初始化客户识别数据库 — 扫描群成员面板中的'客户'标签。"""
+        if not self._assigned_groups:
+            logger.info("无分配群，跳过客户扫描")
+            return
+
+        group_list = list(self._assigned_groups)
+        logger.info(f"开始扫描 {len(group_list)} 个群的成员面板...")
+
+        try:
+            # 在后台线程执行 UIA 扫描（避免阻塞事件循环）
+            all_customers = await asyncio.to_thread(
+                self.scanner.scan_all_group_customers, group_list
+            )
+
+            if all_customers:
+                # 合并所有群的客户名称
+                merged: Set[str] = set()
+                for customers in all_customers.values():
+                    merged.update(customers)
+                self.classifier.load_customers_from_scan(merged)
+            else:
+                logger.warning("UI 扫描未获取到客户数据，使用降级规则")
+        except Exception as e:
+            logger.warning(f"客户扫描失败，使用降级规则: {e}")
 
     async def stop(self):
         """停止监控。"""
@@ -92,8 +122,7 @@ class MonitorEngine:
         poll_interval = self.config.get("monitor.poll_interval", 30)
         alert_timeout = self.config.get("alert.timeout_seconds", 300)
 
-        # 记录客户发言和员工回复的时间
-        customer_msg_times: dict = {}  # group_name -> timestamp
+        customer_msg_times: dict = {}
         staff_reply_times: dict = {}
         alerted_groups: set = set()
 
@@ -104,27 +133,23 @@ class MonitorEngine:
                 for item in items:
                     group_name = item.group_name
 
-                    # 过滤：只关注分配到的群
                     if self._assigned_groups and group_name not in self._assigned_groups:
                         continue
 
-                    # 检测是否有新消息（与已知状态比对）
                     msg_key = f"{item.sender_name}:{item.last_message}"
                     known = self._known_messages.get(group_name, "")
                     if msg_key == known:
-                        continue  # 无变化
+                        continue
 
                     self._known_messages[group_name] = msg_key
 
                     if not item.sender_name:
                         continue
 
-                    # 分类发言者
                     now = time.time()
                     if self.classifier.is_customer(item.sender_name):
-                        # 客户发言
                         customer_msg_times[group_name] = now
-                        logger.info(f"[监控] 客户发言: {group_name} ← {item.sender_name}")
+                        logger.info(f"[监控] 客户发言: {group_name} <- {item.sender_name}")
 
                         if self._on_customer_msg:
                             await self._on_customer_msg({
@@ -135,11 +160,9 @@ class MonitorEngine:
                             })
 
                     elif self.classifier.is_staff(item.sender_name):
-                        # 员工回复
                         staff_reply_times[group_name] = now
-                        logger.info(f"[监控] 员工回复: {group_name} ← {item.sender_name}")
+                        logger.info(f"[监控] 员工回复: {group_name} <- {item.sender_name}")
 
-                        # 取消该群的预警
                         if group_name in alerted_groups:
                             alerted_groups.discard(group_name)
 
@@ -155,7 +178,6 @@ class MonitorEngine:
                 now = time.time()
                 for group_name, last_customer_time in list(customer_msg_times.items()):
                     last_reply = staff_reply_times.get(group_name, 0)
-                    # 客户发言后无回复，且超过阈值
                     if last_customer_time > last_reply and now - last_customer_time > alert_timeout:
                         if group_name not in alerted_groups:
                             alerted_groups.add(group_name)
@@ -173,12 +195,10 @@ class MonitorEngine:
 
             await asyncio.sleep(poll_interval)
 
-    # ==== 统计信息 ====
-
     def get_stats(self) -> dict:
-        """获取监控统计。"""
         return {
             "assigned_groups": len(self._assigned_groups),
             "known_messages": len(self._known_messages),
+            "known_customers": self.classifier.known_customer_count,
             "running": self._running,
         }
