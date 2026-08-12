@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
 from app.shared.config import Config
+from app.shared.group_manager import get_group_manager
 from app.master.core import get_master_core
 from app.master.routes.pages import router as pages_router
 
@@ -19,29 +20,22 @@ logger = logging.getLogger(__name__)
 
 
 class MasterServer:
-    """主控端 FastAPI 服务器。
-
-    提供 Web 管理界面 + WebSocket 执行端通信。
-    """
+    """主控端 FastAPI 服务器。"""
 
     def __init__(self):
         self.config = Config()
         self.core = get_master_core()
+        self.group_mgr = get_group_manager()
 
-        # 静态文件 & 模板
         web_dir = Path(__file__).parent.parent / "web"
         self.templates_dir = str(web_dir / "templates")
         self.static_dir = str(web_dir / "static")
 
-        # 创建 FastAPI 应用
         self.app = self._create_app()
 
     def _create_app(self) -> FastAPI:
-        """创建并配置 FastAPI 应用。"""
-
         @asynccontextmanager
         async def lifespan(app: FastAPI):
-            """应用生命周期：启动时开启心跳检测，关闭时清理。"""
             logger.info("主控端服务启动中...")
             heartbeat_task = asyncio.create_task(self.core._heartbeat_loop())
             yield
@@ -52,19 +46,11 @@ class MasterServer:
             except asyncio.CancelledError:
                 pass
 
-        app = FastAPI(
-            title="企业微信群发系统 - 主控端",
-            lifespan=lifespan
-        )
+        app = FastAPI(title="企业微信群发系统 - 主控端", lifespan=lifespan)
 
-        # 静态文件 & 模板
         templates = Jinja2Templates(directory=self.templates_dir)
         app.mount("/static", StaticFiles(directory=self.static_dir), name="static")
-
-        # 注册页面路由
         app.include_router(pages_router)
-
-        # 注册 API 和 WebSocket 路由
         self._register_routes(app, templates)
         self._register_ws(app)
 
@@ -76,22 +62,71 @@ class MasterServer:
         @app.get("/")
         async def dashboard(request: Request):
             data = self.core.get_dashboard_data()
-            return templates.TemplateResponse(
-                "dashboard.html",
-                {"request": request, "data": data}
-            )
+            data["total_groups"] = self.group_mgr.get_count()
+            return templates.TemplateResponse("dashboard.html", {"request": request, "data": data})
 
         @app.get("/api/dashboard")
         async def api_dashboard():
-            return self.core.get_dashboard_data()
+            data = self.core.get_dashboard_data()
+            data["total_groups"] = self.group_mgr.get_count()
+            return data
 
         @app.get("/api/workers")
         async def api_workers():
             return {"workers": list(self.core._workers.values())}
 
+        # ---- 群列表管理 ----
+
+        @app.get("/api/groups/list")
+        async def api_groups_list():
+            groups = self.group_mgr.get_all()
+            return {
+                "total": len(groups),
+                "groups": groups,
+                "assigned": self.core._group_assignment
+            }
+
         @app.get("/api/groups")
         async def api_groups():
-            return {"assignments": self.core._group_assignment}
+            return {
+                "assignments": self.core._group_assignment,
+                "total": self.group_mgr.get_count(),
+                "all": self.group_mgr.get_all()
+            }
+
+        @app.get("/api/groups/unassigned")
+        async def api_groups_unassigned():
+            unassigned = self.group_mgr.get_unassigned(self.core._group_assignment)
+            return {"unassigned": unassigned, "count": len(unassigned)}
+
+        @app.get("/api/groups/export")
+        async def api_groups_export():
+            return {"text": self.group_mgr.export_as_text()}
+
+        @app.post("/api/groups/add")
+        async def api_add_group(data: dict):
+            name = data.get("group_name", "").strip()
+            if not name:
+                return {"error": "群名不能为空"}, 400
+            ok = self.group_mgr.add_group(name)
+            return {"ok": ok, "group_name": name}
+
+        @app.post("/api/groups/import")
+        async def api_import_groups(data: dict):
+            text = data.get("text", "")
+            names = data.get("groups", [])
+            if text:
+                count = self.group_mgr.import_from_text(text)
+            elif names:
+                count = self.group_mgr.import_groups(names)
+            else:
+                return {"error": "请提供群名列表(text 或 groups)"}, 400
+            return {"ok": True, "added": count, "total": self.group_mgr.get_count()}
+
+        @app.delete("/api/groups/{group_name}")
+        async def api_remove_group(group_name: str):
+            ok = self.group_mgr.remove_group(group_name)
+            return {"ok": ok, "group_name": group_name}
 
         @app.post("/api/groups/assign")
         async def api_assign_group(data: dict):
@@ -109,10 +144,11 @@ class MasterServer:
                 self.core.assign_group(group_name, worker_id)
             return {"ok": True, "count": len(assignments)}
 
+        # ---- 发送管理 ----
+
         @app.post("/api/send/trigger")
         async def api_trigger_send():
-            store = self.core.store
-            active_groups = store.get_active_groups()
+            active_groups = self.core.store.get_active_groups()
             group_names = list(active_groups.keys())
             result = await self.core.dispatch_send_tasks(group_names)
             return {
@@ -120,6 +156,8 @@ class MasterServer:
                 "active_groups": len(group_names),
                 "tasks_dispatched": sum(len(v) for v in result.values())
             }
+
+        # ---- 预警管理 ----
 
         @app.post("/api/alerts/acknowledge")
         async def api_ack_alert(data: dict):
@@ -132,6 +170,8 @@ class MasterServer:
                 alerts[group_name]["acknowledged"] = True
                 store.save("alerts", alerts)
             return {"ok": True}
+
+        # ---- 模板管理 ----
 
         @app.get("/api/templates")
         async def api_list_templates():
@@ -164,9 +204,7 @@ class MasterServer:
         async def ws_endpoint(websocket: WebSocket, worker_id: str):
             await websocket.accept()
             logger.info(f"执行端 WebSocket 连接: {worker_id}")
-
             await self.core.register_worker(worker_id, websocket)
-
             try:
                 while True:
                     message = await websocket.receive_text()
@@ -174,12 +212,9 @@ class MasterServer:
                         data = json.loads(message)
                     except json.JSONDecodeError:
                         data = {"type": "raw", "content": message}
-
                     msg_type = data.get("type", "")
-
                     if msg_type == "heartbeat":
                         await self.core.handle_heartbeat(worker_id, data)
-
                     elif msg_type == "monitor_update":
                         group_name = data.get("group_name")
                         if group_name:
@@ -195,7 +230,6 @@ class MasterServer:
                             timeline[group_name]["last_customer_msg"] = data.get("timestamp")
                             timeline[group_name]["sender"] = data.get("sender", "")
                             store.save("timeline", timeline)
-
                     elif msg_type == "staff_reply":
                         group_name = data.get("group_name")
                         if group_name:
@@ -207,17 +241,13 @@ class MasterServer:
                                 if group_name in alerts:
                                     alerts[group_name]["resolved"] = True
                                     self.core.store.save("alerts", alerts)
-
                     elif msg_type == "alert_trigger":
                         await self.core.broadcast_alert(data)
-
                     elif msg_type == "send_result":
                         await self.core.handle_send_result(worker_id, data)
-
                     elif msg_type == "worker_info":
                         if "info" in data:
                             self.core._workers[worker_id].update(data["info"])
-
             except WebSocketDisconnect:
                 logger.info(f"执行端 WebSocket 断开: {worker_id}")
             except Exception as e:
@@ -230,9 +260,4 @@ class MasterServer:
         import uvicorn
         port = self.config.get("relay.master_port", 8080)
         logger.info(f"主控端 Web 服务启动于 http://localhost:{port}")
-        uvicorn.run(
-            self.app,
-            host="0.0.0.0",
-            port=port,
-            log_level="info"
-        )
+        uvicorn.run(self.app, host="0.0.0.0", port=port, log_level="info")
